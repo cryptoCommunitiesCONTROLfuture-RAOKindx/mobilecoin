@@ -126,6 +126,8 @@ impl Message for DcapEvidence {
 #[derive(Clone, Oneof)]
 pub enum EvidenceKind {
     #[prost(message, tag = "4")]
+    Epid(VerificationReport),
+    #[prost(message, tag = "5")]
     Dcap(DcapEvidence),
 }
 
