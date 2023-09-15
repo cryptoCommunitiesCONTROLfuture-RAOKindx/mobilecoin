@@ -26,6 +26,12 @@ pub enum Error {
     ReportDeserialization,
     /// The IAS report could not be verified: {0}
     ReportVerification(VerifierError),
+    /// The evidence message could not be serialized
+    EvidenceSerialization,
+    /// The evidence message could not be deserialized
+    EvidenceDeserialization,
+    /// The evidence message could not be verified
+    EvidenceVerification,
     /// The remote identity was not in a format that fit within report data
     BadRemoteIdentity,
     /// Invariant problem: we completed a handshake without a remote identity

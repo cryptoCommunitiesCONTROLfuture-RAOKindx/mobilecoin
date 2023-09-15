@@ -2548,6 +2548,7 @@ dependencies = [
  "mc-util-build-sgx",
  "mc-util-encodings",
  "mc-util-from-random",
+ "p256",
  "prost",
  "rand_core",
  "rand_hc",

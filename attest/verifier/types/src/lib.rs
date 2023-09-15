@@ -7,6 +7,6 @@ extern crate alloc;
 mod verification;
 
 pub use crate::verification::{
-    DcapEvidence, EnclaveReportDataContents, EvidenceMessage, VerificationReport,
+    DcapEvidence, EnclaveReportDataContents, EvidenceKind, EvidenceMessage, VerificationReport,
     VerificationSignature,
 };
