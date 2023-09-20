@@ -2,7 +2,7 @@
 
 //! Initiator-specific transition functions
 
-use std::time::SystemTime;
+use core::time::Instant;
 
 use crate::{
     AuthPending, AuthRequestOutput, AuthResponseInput, ClientInitiate, Error, NodeInitiate, Ready,
@@ -167,47 +167,44 @@ where
                 // Received EvidenceMessage
                 if let Ok(remote_evidence) = EvidenceMessage::decode(output.payload.as_slice()) {
                     match remote_evidence.evidence {
-                        Some(evidence_kind) => {
-                            match evidence_kind {
-                                EvidenceKind::Dcap(dcap_evidence) => {
-                                    let (quote, collateral, report_data) = match dcap_evidence {
-                                        DcapEvidence {
-                                            quote: Some(quote),
-                                            collateral: Some(collateral),
-                                            report_data: Some(report_data)
-                                        } => (quote, collateral, report_data),
-                                        _ => return Err(Error::EvidenceDeserialization),
-                                    };
+                        Some(EvidenceKind::Dcap(dcap_evidence)) => {
+                            let (quote, collateral, report_data) = match dcap_evidence {
+                                DcapEvidence {
+                                    quote: Some(quote),
+                                    collateral: Some(collateral),
+                                    report_data: Some(report_data)
+                                } => (quote, collateral, report_data),
+                                _ => return Err(Error::EvidenceDeserialization),
+                            };
 
-                                    let verifier = DcapVerifier::new(
-                                        input.identities,
-                                        DateTime::from(SystemTime),
-                                        report_data,
-                                    );
-                                    let evidence = Evidence::new(quote, collateral)
-                                        .map_err(|e| Error::EvidenceDeserialization)?;
-                                    match verifier.verify(evidence).is_success().unwrap_u8() {
-                                        1 => {
-                                            Ok((
-                                                Ready {
-                                                    writer: result.initiator_cipher,
-                                                    reader: result.responder_cipher,
-                                                    binding: result.channel_binding,
-                                                },
-                                                EvidenceMessage {
-                                                    evidence: Some(EvidenceKind::Dcap(dcap_evidence))
-                                                },
-                                            ))
+                            let current_time = Instant::now();
+                            let epoch_time = current_time.duration_since(Instant::UNIX_EPOCH)
+                                .map_err(Error::EvidenceVerification)?;
+                            let verifier = DcapVerifier::new(
+                                input.identities,
+                                DateTime::from_unix_duration(epoch_time),
+                                report_data,
+                            );
+                            let evidence = Evidence::new(quote, collateral)
+                                .map_err(|e| Error::EvidenceDeserialization)?;
+                            match verifier.verify(evidence).is_success().unwrap_u8() {
+                                1 => {
+                                    Ok((
+                                        Ready {
+                                            writer: result.initiator_cipher,
+                                            reader: result.responder_cipher,
+                                            binding: result.channel_binding,
                                         },
-                                        _ => Err(Error::EvidenceVerification),
-                                    }
-                                    
+                                        EvidenceMessage {
+                                            evidence: Some(EvidenceKind::Dcap(dcap_evidence))
+                                        },
+                                    ))
                                 },
-                                // We shouldn't be getting anything other than Dcap here
-                                _ => Err(Error::EvidenceDeserialization),
+                                _ => Err(Error::EvidenceVerification),
                             }
+                            
                         }
-                        None => Err(Error::EvidenceDeserialization)
+                        _ => Err(Error::ReportDeserialization),
                     }
                 }
                 // Received IAS report

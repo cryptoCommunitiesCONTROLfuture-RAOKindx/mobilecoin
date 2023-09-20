@@ -869,6 +869,7 @@ version = "5.0.5"
 dependencies = [
  "aead",
  "cargo-emit",
+ "der",
  "digest",
  "displaydoc",
  "mc-attest-core",
@@ -878,6 +879,7 @@ dependencies = [
  "mc-crypto-noise",
  "mc-util-build-script",
  "mc-util-build-sgx",
+ "p256",
  "prost",
  "rand_core",
  "serde",
