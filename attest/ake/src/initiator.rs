@@ -252,8 +252,8 @@ where
     }
 }
 
-/// AuthPending + UnverifiedReport => Terminated + VerificationReport
-impl<KexAlgo, Cipher, DigestAlgo> Transition<Terminated, UnverifiedReport, VerificationReport>
+/// AuthPending + UnverifiedReport => Terminated + EvidenceMessage
+impl<KexAlgo, Cipher, DigestAlgo> Transition<Terminated, UnverifiedReport, EvidenceMessage>
     for AuthPending<KexAlgo, Cipher, DigestAlgo>
 where
     KexAlgo: Kex,
@@ -266,7 +266,7 @@ where
         self,
         _csprng: &mut R,
         input: UnverifiedReport,
-    ) -> Result<(Terminated, VerificationReport), Self::Error> {
+    ) -> Result<(Terminated, EvidenceMessage), Self::Error> {
         let output = self
             .state
             .read_message(input.as_ref())
@@ -274,10 +274,18 @@ where
         match output.status {
             HandshakeStatus::InProgress(_state) => Err(Error::HandshakeNotComplete),
             HandshakeStatus::Complete(_) => {
-                let remote_report = VerificationReport::decode(output.payload.as_slice())
-                    .map_err(|_e| Error::ReportDeserialization)?;
+                if let Ok(remote_evidence) = EvidenceMessage::decode(output.payload.as_slice()) {
+                    match remote_evidence.evidence {
+                        Some(EvidenceKind::Dcap(dcap_evidence)) => Ok((Terminated, EvidenceMessage { evidence: Some(EvidenceKind::Dcap(dcap_evidence)) })),
+                        _ => Err(Error::ReportDeserialization),
+                    }
+                }
+                else {
+                    let remote_report = VerificationReport::decode(output.payload.as_slice())
+                        .map_err(|_| Error::ReportDeserialization)?;
 
-                Ok((Terminated, remote_report))
+                    Ok((Terminated, EvidenceMessage { evidence: Some(EvidenceKind::Epid(remote_report)) }))
+                }
             }
         }
     }
