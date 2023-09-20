@@ -2,20 +2,22 @@
 
 //! Initiator-specific transition functions
 
+use std::time::SystemTime;
+
 use crate::{
     AuthPending, AuthRequestOutput, AuthResponseInput, ClientInitiate, Error, NodeInitiate, Ready,
     Start, Terminated, Transition, UnverifiedReport,
 };
 use alloc::vec::Vec;
-use mc_attest_core::{EvidenceKind, EvidenceMessage, ReportDataMask, VerificationReport};
-use mc_attest_verifier::{Verifier, DEBUG_ENCLAVE};
-use mc_attestation_verifier::{Quote3Verifier, Verifier as DcapVerifier};
+use der::DateTime;
+use mc_attest_core::{DcapEvidence, EvidenceKind, EvidenceMessage, ReportDataMask, VerificationReport};
+use mc_attest_verifier::{DcapVerifier, Verifier, DEBUG_ENCLAVE};
+use mc_attestation_verifier::Evidence;
 use mc_crypto_keys::{Kex, ReprBytes};
 use mc_crypto_noise::{
     HandshakeIX, HandshakeNX, HandshakeOutput, HandshakePattern, HandshakeState, HandshakeStatus,
     NoiseCipher, NoiseDigest, ProtocolName,
 };
-use p256::ecdsa::VerifyingKey;
 use prost::Message;
 use rand_core::{CryptoRng, RngCore};
 
@@ -168,21 +170,23 @@ where
                         Some(evidence_kind) => {
                             match evidence_kind {
                                 EvidenceKind::Dcap(dcap_evidence) => {
-                                    let quote = dcap_evidence.quote.as_ref()
-                                        .ok_or(Error::EvidenceDeserialization)?;
-                                    let collateral = dcap_evidence.collateral.as_ref()
-                                        .ok_or(Error::EvidenceDeserialization)?;
-                                    let cert = collateral.pck_crl_issuer_chain().iter().next()
-                                        .ok_or(Error::EvidenceDeserialization)?;
-                                    let key = VerifyingKey::from_sec1_bytes(
-                                        cert.tbs_certificate
-                                        .subject_public_key_info
-                                        .subject_public_key
-                                        .as_bytes()
-                                        .ok_or(Error::EvidenceDeserialization)?,
-                                    ).expect("Failed to decode public key");
-                                    let verifier = Quote3Verifier::new(Some(key));
-                                    match verifier.verify(quote).is_success().unwrap_u8() {
+                                    let (quote, collateral, report_data) = match dcap_evidence {
+                                        DcapEvidence {
+                                            quote: Some(quote),
+                                            collateral: Some(collateral),
+                                            report_data: Some(report_data)
+                                        } => (quote, collateral, report_data),
+                                        _ => return Err(Error::EvidenceDeserialization),
+                                    };
+
+                                    let verifier = DcapVerifier::new(
+                                        input.identities,
+                                        DateTime::from(SystemTime),
+                                        report_data,
+                                    );
+                                    let evidence = Evidence::new(quote, collateral)
+                                        .map_err(|e| Error::EvidenceDeserialization)?;
+                                    match verifier.verify(evidence).is_success().unwrap_u8() {
                                         1 => {
                                             Ok((
                                                 Ready {
@@ -199,7 +203,7 @@ where
                                     }
                                     
                                 },
-                                // TODO: We shouldn't be getting anything other than Dcap here
+                                // We shouldn't be getting anything other than Dcap here
                                 _ => Err(Error::EvidenceDeserialization),
                             }
                         }
