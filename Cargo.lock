@@ -2751,8 +2751,7 @@ dependencies = [
 [[package]]
 name = "mc-attestation-verifier"
 version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6bdeca0948f17208a69b0bccd33f28c7f75c0053c5b13e22389d04fcbb662aaf"
+source = "git+https://github.com/mobilecoinfoundation/attestation.git?rev=9f3c2490962dae464ad7ebf5de126535377eb024#9f3c2490962dae464ad7ebf5de126535377eb024"
 dependencies = [
  "der",
  "displaydoc",

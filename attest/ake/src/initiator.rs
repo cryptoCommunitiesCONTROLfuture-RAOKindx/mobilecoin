@@ -2,8 +2,6 @@
 
 //! Initiator-specific transition functions
 
-use core::time::Instant;
-
 use crate::{
     AuthPending, AuthRequestOutput, AuthResponseInput, ClientInitiate, Error, NodeInitiate, Ready,
     Start, Terminated, Transition, UnverifiedReport,
@@ -65,6 +63,7 @@ where
         self,
         csprng: &mut R,
         _input: ClientInitiate<KexAlgo, Cipher, DigestAlgo>,
+        _time: impl Into<Option<DateTime>>,
     ) -> Result<
         (
             AuthPending<KexAlgo, Cipher, DigestAlgo>,
@@ -110,6 +109,7 @@ where
         self,
         csprng: &mut R,
         input: NodeInitiate<KexAlgo, Cipher, DigestAlgo>,
+        _time: impl Into<Option<DateTime>>,
     ) -> Result<
         (
             AuthPending<KexAlgo, Cipher, DigestAlgo>,
@@ -156,6 +156,7 @@ where
         self,
         _csprng: &mut R,
         input: AuthResponseInput,
+        time: impl Into<Option<DateTime>>,
     ) -> Result<(Ready<Cipher>, EvidenceMessage), Self::Error> {
         let output = self
             .state
@@ -168,7 +169,7 @@ where
                 if let Ok(remote_evidence) = EvidenceMessage::decode(output.payload.as_slice()) {
                     match remote_evidence.evidence {
                         Some(EvidenceKind::Dcap(dcap_evidence)) => {
-                            let (quote, collateral, report_data) = match dcap_evidence {
+                            let (quote, collateral, report_data) = match dcap_evidence.clone() {
                                 DcapEvidence {
                                     quote: Some(quote),
                                     collateral: Some(collateral),
@@ -176,17 +177,13 @@ where
                                 } => (quote, collateral, report_data),
                                 _ => return Err(Error::EvidenceDeserialization),
                             };
-
-                            let current_time = Instant::now();
-                            let epoch_time = current_time.duration_since(Instant::UNIX_EPOCH)
-                                .map_err(Error::EvidenceVerification)?;
                             let verifier = DcapVerifier::new(
                                 input.identities,
-                                DateTime::from_unix_duration(epoch_time),
+                                time,
                                 report_data,
                             );
                             let evidence = Evidence::new(quote, collateral)
-                                .map_err(|e| Error::EvidenceDeserialization)?;
+                                .map_err(|_| Error::EvidenceDeserialization)?;
                             match verifier.verify(evidence).is_success().unwrap_u8() {
                                 1 => {
                                     Ok((
@@ -263,6 +260,7 @@ where
         self,
         _csprng: &mut R,
         input: UnverifiedReport,
+        _time: impl Into<Option<DateTime>>,
     ) -> Result<(Terminated, EvidenceMessage), Self::Error> {
         let output = self
             .state
