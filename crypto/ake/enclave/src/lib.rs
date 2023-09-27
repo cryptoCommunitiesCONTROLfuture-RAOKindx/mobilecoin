@@ -12,7 +12,7 @@ use mc_attest_ake::{
 };
 use mc_attest_core::{
     EnclaveReportDataContents, EvidenceMessage, IasNonce, IntelSealed, Nonce, NonceError, Quote, QuoteNonce,
-    Report, ReportData, TargetInfo, VerificationReport,
+    Report, ReportData, TargetInfo,
 };
 use mc_attest_enclave_api::{
     ClientAuthRequest, ClientAuthResponse, ClientSession, EnclaveMessage, Error, NonceAuthRequest,
