@@ -8,8 +8,7 @@ use crate::{
     state::{Ready, Start},
 };
 use alloc::vec::Vec;
-use der::DateTime;
-use mc_attest_core::{ReportDataMask, VerificationReport};
+use mc_attest_core::{ReportDataMask, VerificationReport, EvidenceMessage};
 use mc_attest_verifier::{Verifier, DEBUG_ENCLAVE};
 use mc_crypto_keys::{Kex, ReprBytes};
 use mc_crypto_noise::{
@@ -37,7 +36,7 @@ trait ResponderTransitionMixin {
     fn handle_response<KexAlgo, Cipher, DigestAlgo>(
         csprng: &mut (impl CryptoRng + RngCore),
         handshake_state: HandshakeState<KexAlgo, Cipher, DigestAlgo>,
-        ias_report: VerificationReport,
+        evidence: EvidenceMessage,
     ) -> Result<(Ready<Cipher>, AuthResponseOutput), Error>
     where
         KexAlgo: Kex,
@@ -83,7 +82,7 @@ impl ResponderTransitionMixin for Start {
     fn handle_response<KexAlgo, Cipher, DigestAlgo>(
         csprng: &mut (impl CryptoRng + RngCore),
         handshake_state: HandshakeState<KexAlgo, Cipher, DigestAlgo>,
-        ias_report: VerificationReport,
+        evidence: EvidenceMessage,
     ) -> Result<(Ready<Cipher>, AuthResponseOutput), Error>
     where
         KexAlgo: Kex,
@@ -91,13 +90,13 @@ impl ResponderTransitionMixin for Start {
         DigestAlgo: NoiseDigest,
     {
         // Encrypt the local report for output
-        let mut report_bytes = Vec::with_capacity(ias_report.encoded_len());
-        ias_report
-            .encode(&mut report_bytes)
+        let mut evidence_bytes = Vec::with_capacity(evidence.encoded_len());
+        evidence
+            .encode(&mut evidence_bytes)
             .expect("Invariant failure, encoded_len insufficient to encode IAS report");
 
         let output = handshake_state
-            .write_message(csprng, &report_bytes)
+            .write_message(csprng, &evidence_bytes)
             .map_err(Error::HandshakeWrite)?;
 
         match output.status {
@@ -133,7 +132,6 @@ where
         self,
         csprng: &mut R,
         input: NodeAuthRequestInput<KexAlgo, Cipher, DigestAlgo>,
-        _time: impl Into<Option<DateTime>>,
     ) -> Result<(Ready<Cipher>, AuthResponseOutput), Error> {
         // Read the request and return the payload and state
         let (handshake_state, payload) = self
@@ -162,7 +160,7 @@ where
             )
             .verify(&remote_report)?;
 
-        Self::handle_response(csprng, handshake_state, input.ias_report)
+        Self::handle_response(csprng, handshake_state, input.evidence)
     }
 }
 
@@ -185,13 +183,12 @@ where
         self,
         csprng: &mut R,
         input: ClientAuthRequestInput<KexAlgo, Cipher, DigestAlgo>,
-        _time: impl Into<Option<DateTime>>,
     ) -> Result<(Ready<Cipher>, AuthResponseOutput), Error> {
         let (handshake_state, _payload) = self
             .handle_request::<HandshakeNX, KexAlgo, Cipher, DigestAlgo>(
                 &input.data.data,
                 input.local_identity,
             )?;
-        Self::handle_response(csprng, handshake_state, input.ias_report)
+        Self::handle_response(csprng, handshake_state, input.evidence)
     }
 }

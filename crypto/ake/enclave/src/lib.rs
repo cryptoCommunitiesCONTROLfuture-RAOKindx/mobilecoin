@@ -11,8 +11,8 @@ use mc_attest_ake::{
     ClientInitiate, NodeAuthRequestInput, NodeInitiate, Ready, Start, Transition,
 };
 use mc_attest_core::{
-    EnclaveReportDataContents, IasNonce, IntelSealed, Nonce, NonceError, Quote, QuoteNonce, Report,
-    ReportData, TargetInfo, VerificationReport,
+    EnclaveReportDataContents, EvidenceMessage, IasNonce, IntelSealed, Nonce, NonceError, Quote, QuoteNonce,
+    Report, ReportData, TargetInfo, VerificationReport,
 };
 use mc_attest_enclave_api::{
     ClientAuthRequest, ClientAuthResponse, ClientSession, EnclaveMessage, Error, NonceAuthRequest,
@@ -84,7 +84,7 @@ pub struct AkeEnclaveState<EI: EnclaveIdentity> {
     ias_pending: Mutex<LruCache<IasNonce, Quote>>,
 
     /// The cached attestation evidence, if any.
-    current_attestation_evidence: Mutex<Option<VerificationReport>>,
+    current_attestation_evidence: Mutex<Option<EvidenceMessage>>,
 
     /// A map of responder-ID to incomplete, outbound, AKE state.
     initiator_auth_pending: Mutex<LruCache<ResponderId, AuthPending<X25519, Aes256Gcm, Sha512>>>,
@@ -322,6 +322,7 @@ impl<EI: EnclaveIdentity> AkeEnclaveState<EI> {
         let auth_response_event = AuthResponseInput::new(
             auth_response_output_bytes.into(),
             [self.trusted_identity()?],
+            None,
         );
         let (initiator, _verification_report) =
             initiator.try_next(&mut csprng, auth_response_event)?;
@@ -438,7 +439,7 @@ impl<EI: EnclaveIdentity> AkeEnclaveState<EI> {
         &self,
         peer_id: &ResponderId,
         msg: PeerAuthResponse,
-    ) -> Result<(PeerSession, VerificationReport)> {
+    ) -> Result<(PeerSession, EvidenceMessage)> {
         // Find our state machine
         let initiator = self
             .initiator_auth_pending
@@ -449,11 +450,11 @@ impl<EI: EnclaveIdentity> AkeEnclaveState<EI> {
         let msg: Vec<u8> = msg.into();
         let auth_response_output = AuthResponseOutput::from(msg);
         let identities = [self.trusted_identity()?];
-        let auth_response_input = AuthResponseInput::new(auth_response_output, identities);
+        let auth_response_input = AuthResponseInput::new(auth_response_output, identities, None);
 
         // Advance the state machine to ready (or failure)
         let mut csprng = McRng::default();
-        let (initiator, verification_report) =
+        let (initiator, evidence_message) =
             initiator.try_next(&mut csprng, auth_response_input)?;
 
         let peer_session = PeerSession::from(initiator.binding());
@@ -462,7 +463,7 @@ impl<EI: EnclaveIdentity> AkeEnclaveState<EI> {
             .lock()?
             .put(peer_session.clone(), initiator);
 
-        Ok((peer_session, verification_report))
+        Ok((peer_session, evidence_message))
     }
 
     /// Close a peer connection
@@ -626,7 +627,7 @@ impl<EI: EnclaveIdentity> AkeEnclaveState<EI> {
     //
 
     /// Get the cached attestation evidence if available
-    pub fn get_attestation_evidence(&self) -> Result<VerificationReport> {
+    pub fn get_attestation_evidence(&self) -> Result<EvidenceMessage> {
         (*self.current_attestation_evidence.lock()?)
             .clone()
             .ok_or(Error::NoAttestationEvidenceAvailable)
@@ -711,7 +712,7 @@ impl<EI: EnclaveIdentity> AkeEnclaveState<EI> {
     /// Verify attestation evidence
     pub fn verify_attestation_evidence(
         &self,
-        attestation_evidence: VerificationReport,
+        attestation_evidence: EvidenceMessage,
     ) -> Result<()> {
         let verifier = self.get_verifier()?;
 

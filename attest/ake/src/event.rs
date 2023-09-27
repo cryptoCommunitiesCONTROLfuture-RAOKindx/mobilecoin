@@ -5,6 +5,7 @@
 use crate::mealy::{Input as MealyInput, Output as MealyOutput};
 use alloc::vec::Vec;
 use core::marker::PhantomData;
+use der::DateTime;
 use mc_attest_core::{EvidenceMessage, VerificationReport};
 use mc_attestation_verifier::TrustedIdentity;
 use mc_crypto_keys::Kex;
@@ -23,7 +24,7 @@ where
     /// This is the local node's identity key
     pub(crate) local_identity: KexAlgo::Private,
     /// This is the local node's ias report.
-    pub(crate) ias_report: VerificationReport,
+    pub(crate) evidence: EvidenceMessage,
 
     _kex: PhantomData<KexAlgo>,
     _cipher: PhantomData<Cipher>,
@@ -37,10 +38,10 @@ where
     DigestAlgo: NoiseDigest,
 {
     /// Create a new input event to initiate a node-to-node channel.
-    pub fn new(local_identity: KexAlgo::Private, ias_report: VerificationReport) -> Self {
+    pub fn new(local_identity: KexAlgo::Private, evidence: EvidenceMessage) -> Self {
         Self {
             local_identity,
-            ias_report,
+            evidence,
             _kex: PhantomData,
             _cipher: PhantomData,
             _digest: PhantomData,
@@ -175,7 +176,7 @@ where
     /// This is the local node's identity key
     pub(crate) local_identity: KexAlgo::Private,
     /// This is the local node's ias report.
-    pub(crate) ias_report: VerificationReport,
+    pub(crate) evidence: EvidenceMessage,
 
     /// The auth request input, including payload, if any
     pub(crate) data: AuthRequestOutput<HandshakeNX, KexAlgo, Cipher, DigestAlgo>,
@@ -198,11 +199,11 @@ where
     pub fn new(
         data: AuthRequestOutput<HandshakeNX, KexAlgo, Cipher, DigestAlgo>,
         local_identity: KexAlgo::Private,
-        ias_report: VerificationReport,
+        evidence: EvidenceMessage,
     ) -> Self {
         Self {
             local_identity,
-            ias_report,
+            evidence,
             data,
         }
     }
@@ -222,7 +223,7 @@ where
     /// This is the local node's identity key
     pub(crate) local_identity: KexAlgo::Private,
     /// This is the local node's ias report.
-    pub(crate) ias_report: VerificationReport,
+    pub(crate) evidence: EvidenceMessage,
     /// The identities that the initiator's IAS report must conform to
     pub(crate) identities: Vec<TrustedIdentity>,
 
@@ -247,12 +248,12 @@ where
     pub fn new(
         data: AuthRequestOutput<HandshakeIX, KexAlgo, Cipher, DigestAlgo>,
         local_identity: KexAlgo::Private,
-        ias_report: VerificationReport,
+        evidence: EvidenceMessage,
         identities: impl Into<Vec<TrustedIdentity>>,
     ) -> Self {
         Self {
             local_identity,
-            ias_report,
+            evidence,
             identities: identities.into(),
             data,
         }
@@ -288,13 +289,18 @@ impl MealyOutput for AuthResponseOutput {}
 pub struct AuthResponseInput {
     pub(crate) data: Vec<u8>,
     pub(crate) identities: Vec<TrustedIdentity>,
+    pub(crate) time: Option<DateTime>,
 }
 
 impl AuthResponseInput {
-    pub fn new(data: AuthResponseOutput, identity: impl Into<Vec<TrustedIdentity>>) -> Self {
+    pub fn new(data: AuthResponseOutput,
+        identity: impl Into<Vec<TrustedIdentity>>,
+        time: impl Into<Option<DateTime>>,
+    ) -> Self {
         Self {
             data: data.0,
             identities: identity.into(),
+            time: time.into(),
         }
     }
 }
