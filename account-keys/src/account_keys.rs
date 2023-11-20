@@ -311,7 +311,6 @@ impl From<Slip10Key> for AccountKey {
     fn from(slip10key: Slip10Key) -> Self {
         let spend_private_key = RootSpendPrivate::from(&slip10key);
         let view_private_key = RootViewPrivate::from(&slip10key);
-
         Self::new(spend_private_key.as_ref(), view_private_key.as_ref())
     }
 }
